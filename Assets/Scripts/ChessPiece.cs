@@ -23,6 +23,9 @@ public class ChessPiece : MonoBehaviour
     private float liftHeight = 0.3f;
     private float moveSpeed = 5f;
 
+    public bool hasMoved = false;
+
+
     private void Start()
     {
         pieceRenderer = GetComponent<Renderer>();

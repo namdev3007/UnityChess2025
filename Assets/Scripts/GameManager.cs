@@ -163,13 +163,36 @@ public class GameManager : MonoBehaviour
 
     private void MovePiece(ChessPiece piece, int row, int col)
     {
-        pieceBoard[piece.currentRow, piece.currentCol] = null;
+        int oldRow = piece.currentRow;
+        int oldCol = piece.currentCol;
+
+        // ✨ Nhập thành
+        if (piece.type == PieceType.King && Mathf.Abs(col - oldCol) == 2)
+        {
+            int rookStartCol = col > oldCol ? 7 : 0;
+            int rookTargetCol = col > oldCol ? col - 1 : col + 1;
+            ChessPiece rook = pieceBoard[row, rookStartCol];
+
+            if (rook != null)
+            {
+                pieceBoard[row, rookStartCol] = null;
+                pieceBoard[row, rookTargetCol] = rook;
+                rook.transform.position = BoardManager.Instance.GetWorldPosition(row, rookTargetCol);
+                rook.currentCol = rookTargetCol;
+                rook.UpdateOriginalPosition();
+                rook.hasMoved = true;
+            }
+        }
+
+        pieceBoard[oldRow, oldCol] = null;
         piece.transform.position = BoardManager.Instance.GetWorldPosition(row, col);
         piece.currentRow = row;
         piece.currentCol = col;
         pieceBoard[row, col] = piece;
         piece.UpdateOriginalPosition();
+        piece.hasMoved = true;
     }
+
 
     private bool HandlePromotionIfNeeded(ChessPiece piece)
     {
@@ -250,6 +273,28 @@ public class GameManager : MonoBehaviour
                 target.Highlight(false, true);
         }
     }
+
+    public bool IsSquareUnderAttack(int row, int col, PieceColor defenderColor)
+    {
+        for (int r = 0; r < 8; r++)
+        {
+            for (int c = 0; c < 8; c++)
+            {
+                ChessPiece attacker = pieceBoard[r, c];
+                if (attacker != null && attacker.color != defenderColor)
+                {
+                    var rule = MoveRuleFactory.GetRule(attacker.type);
+                    if (rule != null && rule.IsValidMove(attacker, row, col, pieceBoard))
+                    {
+                        // Không cần kiểm tra chiếu giả lập vì chỉ quan tâm nước tấn công
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
 
     private void ClearHighlights()
     {
