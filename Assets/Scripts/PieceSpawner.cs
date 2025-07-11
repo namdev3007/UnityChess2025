@@ -2,6 +2,8 @@
 
 public class PieceSpawner : MonoBehaviour
 {
+    public static PieceSpawner Instance;
+
     public GameObject whitePawnPrefab;
     public GameObject whiteRookPrefab;
     public GameObject whiteKnightPrefab;
@@ -19,6 +21,11 @@ public class PieceSpawner : MonoBehaviour
     public GameObject blackPieces;
     public GameObject whitePieces;
 
+    private void Awake()
+    {
+        Instance = this;
+    }
+
     private void Start()
     {
         SpawnAllPieces();
@@ -26,7 +33,6 @@ public class PieceSpawner : MonoBehaviour
 
     public void SpawnAllPieces()
     {
-        // Spawn pawns
         for (int col = 0; col < 8; col++)
         {
             SpawnPiece(whitePawnPrefab, 1, col, PieceColor.White, PieceType.Pawn);
@@ -62,28 +68,18 @@ public class PieceSpawner : MonoBehaviour
 
     private void SpawnPiece(GameObject prefab, int row, int col, PieceColor color, PieceType type)
     {
-        Vector3 pos = BoardManager.Instance.GetWorldPosition(row, col);
-        Quaternion rotation = Quaternion.identity;
-
-        if (type == PieceType.Knight)
-        {
-            rotation = color == PieceColor.White
-                ? Quaternion.Euler(0, 90f, 0)
-                : Quaternion.Euler(0, -90f, 0);
-        }
+        Vector3 position = BoardManager.Instance.GetWorldPosition(row, col);
+        Quaternion rotation = (type == PieceType.Knight) ?
+            (color == PieceColor.White ? Quaternion.Euler(0, 90f, 0) : Quaternion.Euler(0, -90f, 0)) :
+            Quaternion.identity;
 
         Transform parent = (color == PieceColor.White) ? whitePieces.transform : blackPieces.transform;
 
-        GameObject pieceObj = Instantiate(prefab, pos, rotation, parent);
-
-        ChessPiece piece = pieceObj.GetComponent<ChessPiece>();
-        piece.currentRow = row;
-        piece.currentCol = col;
-        piece.color = color;
-        piece.type = type;
-
-        if (pieceObj.GetComponent<PieceSelector>() == null)
-            pieceObj.AddComponent<PieceSelector>();
+        ChessPiece piece = new ChessPieceBuilder()
+            .Create(prefab, position, rotation, parent)
+            .SetInfo(row, col, color, type)
+            .AddSelector()
+            .Build();
 
         GameManager.Instance.pieceBoard[row, col] = piece;
     }

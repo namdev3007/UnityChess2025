@@ -1,16 +1,21 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class BoardManager : MonoBehaviour, IBoardManager
 {
     public static BoardManager Instance;
 
+    public GameObject squarePrefab;         // Chỉ 1 prefab duy nhất
+    public GameObject whiteSquares;         // Cha của ô trắng
+    public GameObject blackSquares;         // Cha của ô đen
+    public GameObject boardBorder;
 
-    public GameObject whiteSquares;
-    public GameObject blackSquares;
-
-    public GameObject whiteSquarePrefab, blackSquarePrefab, boardBorder;
     public int boardSize = 8;
     public float squareSize = 1f;
+
+    public Material whiteMaterial;
+    public Material blackMaterial;
+    public Material highlightMaterial;
+    public Material selectedHighlightMaterial;
 
     public GameObject[,] squares;
 
@@ -44,21 +49,21 @@ public class BoardManager : MonoBehaviour, IBoardManager
                 Vector3 position = new Vector3(x, 0, z);
 
                 bool isWhite = (row + col) % 2 == 0;
-                GameObject prefab = isWhite ? whiteSquarePrefab : blackSquarePrefab;
                 Transform parent = isWhite ? whiteSquares.transform : blackSquares.transform;
 
-                GameObject square = Instantiate(prefab, position, Quaternion.identity, parent);
+                GameObject square = Instantiate(squarePrefab, position, Quaternion.identity, parent);
                 square.name = $"Square_{row}_{col}";
-
-                squares[row, col] = square;
 
                 Square squareScript = square.GetComponent<Square>() ?? square.AddComponent<Square>();
                 squareScript.row = row;
                 squareScript.col = col;
+                squareScript.SetMaterials(whiteMaterial, blackMaterial, highlightMaterial);
+                squareScript.ApplyInitialMaterial(isWhite);
+
+                squares[row, col] = square;
             }
         }
     }
-
 
     private void GenerateBorder()
     {

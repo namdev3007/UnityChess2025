@@ -2,19 +2,60 @@
 
 public class Square : MonoBehaviour
 {
-    public int row; // 0 to 7
-    public int col; // 0 to 7
+    public int row;
+    public int col;
+
+    private Renderer squareRenderer;
+
+    private Material whiteMaterial;
+    private Material blackMaterial;
+    private Material highlightMaterial;
+
+    private bool isWhite;
+
+    private void Start()
+    {
+        squareRenderer = GetComponent<Renderer>();
+    }
+
+    public void SetMaterials(Material whiteMat, Material blackMat, Material highlightMat)
+    {
+        whiteMaterial = whiteMat;
+        blackMaterial = blackMat;
+        highlightMaterial = highlightMat;
+    }
+
+    public void ApplyInitialMaterial(bool white)
+    {
+        isWhite = white;
+        squareRenderer = GetComponent<Renderer>();
+        squareRenderer.material = isWhite ? whiteMaterial : blackMaterial;
+    }
+
+    public void SetHighlight(bool on)
+    {
+        if (squareRenderer == null || highlightMaterial == null) return;
+
+        squareRenderer.material = on
+            ? highlightMaterial
+            : (isWhite ? whiteMaterial : blackMaterial);
+    }
 
     private void OnMouseDown()
     {
-        string colLetter = ((char)('a' + col)).ToString(); // chuyển số 0–7 thành a–h
-        int rowNumber = row + 1; // chuyển 0–7 thành 1–8
-        //Debug.Log($"Clicked square at {colLetter}{rowNumber} (row={row}, col={col})");
+        GameManager.Instance.TryMoveTo(row, col);
     }
 
-    public void SetPosition(int r, int c)
+    private void OnMouseEnter()
     {
-        row = r;
-        col = c;
+        if (GameManager.Instance.selectedPiece != null)
+            CursorManager.Instance.SetHand();
     }
+
+    private void OnMouseExit()
+    {
+        CursorManager.Instance.SetDefault();
+    }
+
+
 }
