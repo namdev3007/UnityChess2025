@@ -65,6 +65,7 @@ public class PromotionManager : MonoBehaviour
         int col = promotingPawn.currentCol;
         PieceColor color = promotingPawn.color;
 
+        // Xóa quân tốt
         Destroy(promotingPawn.gameObject);
         GameManager.Instance.pieceBoard[row, col] = null;
 
@@ -94,8 +95,18 @@ public class PromotionManager : MonoBehaviour
         promotingPawn = null;
 
         GameManager.Instance.NotifyIfCheck();
-        GameManager.Instance.SwitchTurn();
+
+        // ✅ Kiểm tra checkmate sau khi phong
+        PieceColor opponent = GameManager.Instance.currentTurn == PieceColor.White ? PieceColor.Black : PieceColor.White;
+        if (GameManager.Instance.IsCheckmate(opponent))
+        {
+            GameManager.Instance.EndGame(GameManager.Instance.currentTurn);
+            return;
+        }
+
+        GameManager.Instance.SwitchTurnAfterPromotion();
     }
+
 
 
     private GameObject GetPromotionPrefab(PieceColor color, PieceType type)

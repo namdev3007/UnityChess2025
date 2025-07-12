@@ -3,6 +3,8 @@
 public enum PieceType { Pawn, Rook, Knight, Bishop, Queen, King }
 public enum PieceColor { White, Black }
 
+
+
 [RequireComponent(typeof(Collider))]
 public class ChessPiece : MonoBehaviour
 {
@@ -23,13 +25,17 @@ public class ChessPiece : MonoBehaviour
     private float liftHeight = 0.3f;
     private float moveSpeed = 5f;
 
+
     public bool hasMoved = false;
 
-
-    private void Start()
+    private void Awake()
     {
         pieceRenderer = GetComponent<Renderer>();
         pieceCollider = GetComponent<Collider>();
+    }
+
+    private void Start()
+    {
 
         if (pieceRenderer != null && normalMaterial != null)
         {
@@ -50,17 +56,42 @@ public class ChessPiece : MonoBehaviour
         if (pieceRenderer != null)
         {
             if (isUnderAttack && attackHighlightMaterial != null)
+            {
                 pieceRenderer.material = attackHighlightMaterial;
+            }
             else if (isSelected && highlightMaterial != null)
+            {
                 pieceRenderer.material = highlightMaterial;
-            else if (normalMaterial != null)
+            }
+            else
+            {
                 pieceRenderer.material = normalMaterial;
+            }
         }
 
         targetPosition = isSelected
             ? new Vector3(originalPosition.x, originalPosition.y + liftHeight, originalPosition.z)
             : originalPosition;
     }
+
+    public void ResetHighlight()
+    {
+
+        if (pieceRenderer != null && normalMaterial != null)
+        {
+            pieceRenderer.material = normalMaterial;
+        }
+
+        targetPosition = originalPosition;
+    }
+
+
+    public void SetColliderEnabled(bool enabled)
+    {
+        if (pieceCollider != null)
+            pieceCollider.enabled = enabled;
+    }
+
 
     private void OnMouseEnter()
     {

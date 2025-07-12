@@ -69,9 +69,15 @@ public class PieceSpawner : MonoBehaviour
     private void SpawnPiece(GameObject prefab, int row, int col, PieceColor color, PieceType type)
     {
         Vector3 position = BoardManager.Instance.GetWorldPosition(row, col);
-        Quaternion rotation = (type == PieceType.Knight) ?
-            (color == PieceColor.White ? Quaternion.Euler(0, 90f, 0) : Quaternion.Euler(0, -90f, 0)) :
-            Quaternion.identity;
+
+        Quaternion rotation = Quaternion.identity;
+
+        if (type == PieceType.Knight || type == PieceType.King)
+        {
+            rotation = (color == PieceColor.White)
+                ? Quaternion.Euler(0, 90f, 0)
+                : Quaternion.Euler(0, -90f, 0);
+        }
 
         Transform parent = (color == PieceColor.White) ? whitePieces.transform : blackPieces.transform;
 
@@ -83,4 +89,5 @@ public class PieceSpawner : MonoBehaviour
 
         GameManager.Instance.pieceBoard[row, col] = piece;
     }
+
 }

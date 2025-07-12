@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
@@ -13,6 +14,8 @@ public class GameManager : MonoBehaviour
     private readonly List<IKingCheckObserver> checkObservers = new();
 
     private bool isMoving = false;
+    private ChessPiece lastCheckedKing = null;
+    public bool enableCameraSwitch = true; 
 
     private void Awake()
     {
@@ -26,11 +29,19 @@ public class GameManager : MonoBehaviour
             checkObservers.Add(observer);
     }
 
+    public void UpdatePieceColliders()
+    {
+        foreach (ChessPiece piece in pieceBoard)
+        {
+            if (piece == null) continue;
+            piece.SetColliderEnabled(piece.color == currentTurn);
+        }
+    }
+
     public void SelectPiece(ChessPiece piece)
     {
         if (piece.color != currentTurn) return;
 
-        // ✅ Nếu đang chọn chính nó → Bỏ chọn
         if (selectedPiece == piece)
         {
             DeselectPiece();
@@ -44,13 +55,16 @@ public class GameManager : MonoBehaviour
             StartCoroutine(shake.Play(piece));
             Debug.Log($"⛔ {piece.type} không có nước đi hợp lệ.");
             CursorManager.Instance.SetDefault();
+
+            //AudioManager.Instance.PlayInvalidMoveSound(); // 🔊 âm khi đi sai
+
             return;
         }
 
         DeselectPiece();
         selectedPiece = piece;
         selectedPiece.Highlight(true);
-        CursorManager.Instance.SetHand(); // ✅ Đổi con trỏ khi chọn thành công
+        CursorManager.Instance.SetHand();
         HighlightValidMoves(validMoves);
     }
 
@@ -63,14 +77,16 @@ public class GameManager : MonoBehaviour
         Vector2Int target = new(row, col);
         if (!IsMoveLegal(selectedPiece, target))
         {
-            Debug.Log("\u274C Move blocked due to check or invalid.");
-            CursorManager.Instance.SetDefault(); // ✅ Reset chuột nếu move sai
+            CursorManager.Instance.SetDefault();
+            //AudioManager.Instance.PlayInvalidMoveSound(); // 🔊 sai luật
             return;
         }
 
         ChessPiece targetPiece = pieceBoard[row, col];
         HandleCapture(targetPiece);
         MovePiece(selectedPiece, row, col);
+
+        AudioManager.Instance.PlayMoveSound(); // 🔊 di chuyển
 
         if (HandlePromotionIfNeeded(selectedPiece))
         {
@@ -80,7 +96,33 @@ public class GameManager : MonoBehaviour
 
         DeselectPiece();
         NotifyIfCheck();
-        SwitchTurn();
+
+        PieceColor opponent = currentTurn == PieceColor.White ? PieceColor.Black : PieceColor.White;
+        if (IsCheckmate(opponent))
+        {
+            EndGame(currentTurn);
+            return;
+        }
+
+        StartCoroutine(SwitchTurnWithCamera());
+    }
+
+    public void EndGame(PieceColor winner)
+    {
+        Debug.Log($"🏁 {winner} thắng!");
+
+        AudioManager.Instance.PlayWinSound(); // 🔊 kết thúc game
+
+        isMoving = false;
+        Time.timeScale = 0f;
+
+        foreach (ChessPiece piece in pieceBoard)
+        {
+            if (piece != null)
+                piece.ResetHighlight();
+        }
+
+        // UIManager.Instance.ShowWinScreen(winner); // nếu có UI
     }
 
     public void DeselectPiece()
@@ -90,14 +132,8 @@ public class GameManager : MonoBehaviour
             selectedPiece.Highlight(false);
             ClearHighlights();
             selectedPiece = null;
-            CursorManager.Instance.SetDefault(); // ✅ Reset chuột khi bỏ chọn
+            CursorManager.Instance.SetDefault();
         }
-    }
-
-    public void SwitchTurn()
-    {
-        currentTurn = currentTurn == PieceColor.White ? PieceColor.Black : PieceColor.White;
-        Debug.Log($"Turn: {currentTurn}");
     }
 
     public List<Vector2Int> GetValidMoves(ChessPiece piece)
@@ -123,7 +159,6 @@ public class GameManager : MonoBehaviour
 
     private bool SimulateMoveSafe(ChessPiece piece, int targetRow, int targetCol)
     {
-        // Chỉ giả lập qua mảng vị trí, không thay đổi thuộc tính object
         ChessPiece[,] tempBoard = new ChessPiece[8, 8];
         System.Array.Copy(pieceBoard, tempBoard, pieceBoard.Length);
 
@@ -155,9 +190,12 @@ public class GameManager : MonoBehaviour
     {
         if (target != null && target.color != selectedPiece.color)
         {
-            target.DisableCollider(); // ✅ Tắt Collider khi bị ăn
+            target.DisableCollider();
             CaptureManager.Instance.CapturePiece(target);
             pieceBoard[target.currentRow, target.currentCol] = null;
+
+            // (Optional) play capture sound if added to AudioManager
+            // AudioManager.Instance.PlayCaptureSound();
         }
     }
 
@@ -166,7 +204,7 @@ public class GameManager : MonoBehaviour
         int oldRow = piece.currentRow;
         int oldCol = piece.currentCol;
 
-        // ✨ Nhập thành
+        // Nhập thành
         if (piece.type == PieceType.King && Mathf.Abs(col - oldCol) == 2)
         {
             int rookStartCol = col > oldCol ? 7 : 0;
@@ -193,12 +231,12 @@ public class GameManager : MonoBehaviour
         piece.hasMoved = true;
     }
 
-
     private bool HandlePromotionIfNeeded(ChessPiece piece)
     {
         if (piece.type == PieceType.Pawn && (piece.currentRow == 0 || piece.currentRow == 7))
         {
             PromotionManager.Instance.StartPromotion(piece);
+            // Optional: AudioManager.Instance.PlayPromoteSound();
             return true;
         }
         return false;
@@ -207,21 +245,31 @@ public class GameManager : MonoBehaviour
     public void NotifyIfCheck()
     {
         PieceColor opponent = currentTurn == PieceColor.White ? PieceColor.Black : PieceColor.White;
-        if (IsKingInCheck(opponent, pieceBoard))
+        ChessPiece currentKing = FindKing(opponent, pieceBoard);
+        if (currentKing == null) return;
+
+        bool isInCheck = IsKingInCheck(opponent, pieceBoard);
+
+        if (isInCheck)
         {
-            ChessPiece king = FindKing(opponent, pieceBoard);
-            if (king != null)
-            {
-                king.Highlight(false, true);
-                StartCoroutine(new ShakeAnimation(0.25f, 0.1f).Play(king));
-            }
+            currentKing.Highlight(false, true);
+            StartCoroutine(new ShakeAnimation(0.25f, 0.1f).Play(currentKing));
+            AudioManager.Instance.PlayCheckSound(); // 🔊 chiếu tướng
 
             foreach (var observer in checkObservers)
                 observer.OnKingInCheck(opponent);
+
+            lastCheckedKing = currentKing;
+        }
+        else
+        {
+            if (lastCheckedKing != null)
+            {
+                lastCheckedKing.ResetHighlight();
+                lastCheckedKing = null;
+            }
         }
     }
-
-    public bool IsMoving() => isMoving;
 
     private bool IsKingInCheck(PieceColor color, ChessPiece[,] board)
     {
@@ -285,14 +333,53 @@ public class GameManager : MonoBehaviour
                 {
                     var rule = MoveRuleFactory.GetRule(attacker.type);
                     if (rule != null && rule.IsValidMove(attacker, row, col, pieceBoard))
-                    {
-                        // Không cần kiểm tra chiếu giả lập vì chỉ quan tâm nước tấn công
                         return true;
-                    }
                 }
             }
         }
         return false;
+    }
+
+    public bool IsCheckmate(PieceColor color)
+    {
+        if (!IsKingInCheck(color, pieceBoard)) return false;
+
+        for (int row = 0; row < 8; row++)
+        {
+            for (int col = 0; col < 8; col++)
+            {
+                ChessPiece piece = pieceBoard[row, col];
+                if (piece != null && piece.color == color)
+                {
+                    var moves = GetValidMoves(piece);
+                    if (moves.Count > 0)
+                        return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    public void SwitchTurnAfterPromotion()
+    {
+        StartCoroutine(SwitchTurnWithCamera());
+    }
+
+    private IEnumerator SwitchTurnWithCamera()
+    {
+        isMoving = true;
+        currentTurn = currentTurn == PieceColor.White ? PieceColor.Black : PieceColor.White;
+
+        if (enableCameraSwitch)
+            CameraSwitcher.Instance.SwitchTurn(currentTurn);
+
+        yield return new WaitForSeconds(1f);
+
+        UpdatePieceColliders();
+        isMoving = false;
+
+        Debug.Log($"Turn: {currentTurn}");
     }
 
 
@@ -303,8 +390,10 @@ public class GameManager : MonoBehaviour
             square.SetHighlight(false);
             ChessPiece piece = pieceBoard[square.row, square.col];
             if (piece != null)
-                piece.Highlight(false, false);
+                piece.ResetHighlight();
         }
         highlightedSquares.Clear();
     }
+
+    public bool IsMoving() => isMoving;
 }
